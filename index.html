@@ -3,9 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>System Portal - Sovereign Edition</title>
+    <title>Sovereign System - Cloud Sync</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@500;700&display=swap');
         body { font-family: 'Rajdhani', sans-serif; background-color: #020617; color: #94a3b8; }
@@ -14,25 +19,31 @@
         .system-bg { background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); }
         .neon-text { color: #0ea5e9; text-shadow: 0 0 8px rgba(14, 165, 233, 0.6); }
         .neon-bg { background-color: #0ea5e9; box-shadow: 0 0 15px rgba(14, 165, 233, 0.5); }
-        #sidebar { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); width: 16rem; }
+        #sidebar { transition: width 0.3s; width: 16rem; }
         #sidebar.collapsed { width: 5rem; }
         #sidebar.collapsed .link-text, #sidebar.collapsed .portal-title { display: none; }
-        #sidebar.collapsed .nav-btn { justify-content: center; padding-left: 0; padding-right: 0; }
         .nav-btn:hover { color: #0ea5e9; text-shadow: 0 0 10px #0ea5e9; }
         .nav-active { background: linear-gradient(90deg, rgba(14, 165, 233, 0.2) 0%, transparent 100%); color: #0ea5e9; border-left: 4px solid #0ea5e9; }
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); border-left: 1px solid #1e293b; border-top: 1px solid #1e293b; }
-        .calendar-day { min-height: 110px; border-right: 1px solid #1e293b; border-bottom: 1px solid #1e293b; background: #0f172a; transition: 0.3s; }
+        .calendar-day { min-height: 110px; border-right: 1px solid #1e293b; border-bottom: 1px solid #1e293b; background: #0f172a; }
         input, select, textarea { background: #0f172a !important; border: 1px solid #334155 !important; color: #f8fafc !important; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #0ea5e9; border-radius: 10px; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body class="flex h-screen overflow-hidden">
 
+    <div id="login-overlay" class="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center space-y-6">
+        <h1 class="neon-text text-4xl font-bold animate-pulse text-center">SYSTEM ACCESS</h1>
+        <p class="text-slate-500 tracking-[5px]">AUTHENTICATION REQUIRED</p>
+        <button onclick="login()" class="neon-bg text-white font-bold py-3 px-8 rounded flex items-center space-x-3 hover:scale-105 transition">
+            <i class="fab fa-google"></i> <span>IDENTIFY WITH GOOGLE</span>
+        </button>
+    </div>
+
     <aside id="sidebar" class="bg-[#010409] border-r border-slate-800 flex flex-col shadow-2xl z-50">
         <div class="p-6 flex items-center justify-between border-b border-slate-800">
-            <h1 class="portal-title neon-text text-sm font-bold truncate">SYSTEM</h1>
-            <button onclick="toggleSidebar()" class="text-sky-400 hover:scale-110"><i class="fas fa-bars text-xl"></i></button>
+            <h1 class="portal-title neon-text text-sm font-bold truncate uppercase">System</h1>
+            <button onclick="toggleSidebar()" class="text-sky-400"><i class="fas fa-bars text-xl"></i></button>
         </div>
         <nav class="p-4 space-y-2 flex-1 overflow-y-auto">
             <button onclick="showSection('home')" id="home-btn" class="nav-btn w-full flex items-center p-3 rounded" title="Home"><i class="fas fa-home w-8"></i><span class="link-text ml-2">HOME</span></button>
@@ -42,188 +53,251 @@
             <button onclick="showSection('event')" id="event-btn" class="nav-btn w-full flex items-center p-3 rounded" title="Events"><i class="fas fa-bell w-8"></i><span class="link-text ml-2">EVENTS</span></button>
             <button onclick="showSection('calendar')" id="calendar-btn" class="nav-btn w-full flex items-center p-3 rounded" title="Calendar"><i class="fas fa-calendar-alt w-8"></i><span class="link-text ml-2">CALENDAR</span></button>
             <button onclick="showSection('wallet')" id="wallet-btn" class="nav-btn w-full flex items-center p-3 rounded" title="Wallet"><i class="fas fa-wallet w-8"></i><span class="link-text ml-2">WALLET</span></button>
+            <button onclick="logout()" class="nav-btn w-full flex items-center p-3 rounded text-red-500 mt-8"><i class="fas fa-sign-out-alt w-8"></i><span class="link-text ml-2 uppercase font-bold text-[10px]">Shutdown</span></button>
         </nav>
-        <div class="p-4 text-[8px] text-center border-t border-slate-800 tracking-[3px] text-slate-600">V-U PK</div>
     </aside>
 
     <main class="flex-1 flex flex-col overflow-hidden">
         <header class="bg-[#020617]/80 border-b border-slate-800 px-8 py-4 flex justify-between items-center backdrop-blur-md">
             <h1 id="page-title" class="neon-text text-lg">HOME</h1>
-            <div id="header-study-info" class="text-xs font-bold text-slate-500 uppercase italic">APRIL 2026</div>
+            <div id="header-user" class="text-right text-slate-500 text-xs font-bold uppercase tracking-widest">Hunter: <span id="user-name" class="text-sky-400">---</span></div>
         </header>
 
-        <div class="p-8 overflow-y-auto h-full space-y-8">
+        <div class="p-8 overflow-y-auto h-full space-y-8" id="main-content">
             
             <div id="home-section" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="system-bg system-border p-6 rounded-lg"><h3 class="text-[10px] text-sky-400 mb-4">Task Focus</h3><div id="home-task-display" class="text-white font-bold italic text-sm">No tasks.</div></div>
-                <div class="system-bg system-border p-6 rounded-lg"><h3 class="text-[10px] text-sky-400 mb-4">Next Event</h3><div id="home-event-display" class="text-white font-bold italic text-sm">No events.</div></div>
-                <div class="system-bg system-border p-6 rounded-lg border-emerald-500/30"><h3 class="text-[10px] text-emerald-400 mb-4">Balance</h3><div id="home-wallet-display" class="text-2xl font-black text-emerald-400">0.00</div></div>
+                <div class="system-bg system-border p-6 rounded-lg"><h3 class="text-[10px] text-sky-400 mb-4 uppercase">Task Focus</h3><div id="home-task" class="text-white font-bold italic">---</div></div>
+                <div class="system-bg system-border p-6 rounded-lg"><h3 class="text-[10px] text-sky-400 mb-4 uppercase">Next Event</h3><div id="home-event" class="text-white font-bold italic">---</div></div>
+                <div class="system-bg system-border p-6 rounded-lg border-emerald-500/30"><h3 class="text-[10px] text-emerald-400 mb-4 uppercase">Credits</h3><div id="home-balance" class="text-2xl font-black text-emerald-400">0.00</div></div>
             </div>
 
             <div id="study-section" class="hidden space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="system-bg system-border rounded-lg p-6">
-                        <div class="text-sky-400 font-bold mb-4 uppercase text-xs">Academic Profile</div>
-                        <form id="studyProfileForm" class="space-y-4">
+                        <div class="text-sky-400 font-bold mb-4 text-xs uppercase">Profile</div>
+                        <div class="space-y-4">
                             <input type="text" id="studyModule" placeholder="Module Name" class="w-full p-2 rounded text-sm">
-                            <input type="text" id="studyYear" placeholder="Year in Study" class="w-full p-2 rounded text-sm">
-                            <button type="submit" class="neon-bg text-white font-bold py-2 rounded w-full text-[10px]">UPDATE PROFILE</button>
-                        </form>
+                            <input type="text" id="studyYear" placeholder="Year" class="w-full p-2 rounded text-sm">
+                            <button onclick="updateProfile()" class="neon-bg text-white font-bold py-2 rounded w-full text-xs uppercase">Save Profile</button>
+                        </div>
                     </div>
                     <div class="system-bg system-border rounded-lg p-6">
-                        <div class="text-sky-400 font-bold mb-4 uppercase text-xs" id="subj-form-title">Add Subject</div>
-                        <form id="subjectForm" class="space-y-2">
-                            <div class="flex gap-2"><input type="text" id="subjCode" placeholder="Code" class="w-1/3 p-2 rounded text-sm"><input type="text" id="subjName" placeholder="Name" class="w-2/3 p-2 rounded text-sm"></div>
+                        <div class="text-sky-400 font-bold mb-4 text-xs uppercase">Add Skill</div>
+                        <div class="space-y-2">
+                            <input type="text" id="subjCode" placeholder="Code" class="w-full p-2 rounded text-sm">
+                            <input type="text" id="subjName" placeholder="Subject Name" class="w-full p-2 rounded text-sm">
                             <textarea id="subjDesc" placeholder="Description" class="w-full p-2 rounded text-sm"></textarea>
-                            <button type="submit" id="subjSubmitBtn" class="neon-bg text-white font-bold py-2 rounded w-full text-[10px]">REGISTER SUBJECT</button>
-                        </form>
+                            <button onclick="addSubject()" class="neon-bg text-white font-bold py-2 rounded w-full text-xs uppercase">Add Subject</button>
+                        </div>
                     </div>
                 </div>
-                <div class="system-bg system-border rounded-lg overflow-hidden">
-                    <table class="w-full text-left text-sm"><thead class="bg-slate-900/50 text-[10px] text-sky-400"><tr><th class="p-4">CODE</th><th class="p-4">SUBJECT</th><th class="p-4">DESC</th><th class="p-4 text-right">ACTIONS</th></tr></thead><tbody id="subjectList" class="divide-y divide-slate-800"></tbody></table>
-                </div>
+                <div class="system-bg system-border rounded-lg overflow-hidden"><table class="w-full text-left text-sm"><tbody id="subjectList" class="divide-y divide-slate-800"></tbody></table></div>
             </div>
 
             <div id="notes-section" class="hidden space-y-6">
-                <div class="system-bg system-border rounded-lg p-6">
-                    <div class="text-sky-400 font-bold mb-4 uppercase text-xs" id="note-form-title">Archive Knowledge</div>
-                    <form id="noteForm" class="space-y-4">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4"><input type="text" id="noteTitle" placeholder="Note Title" class="p-2 rounded text-sm"><select id="noteSubject" class="p-2 rounded text-sm"><option value="General">General</option></select></div>
-                        <textarea id="noteContent" placeholder="Enter notes..." rows="4" class="w-full p-2 rounded text-sm"></textarea>
-                        <button type="submit" id="noteSubmitBtn" class="neon-bg text-white font-bold py-2 rounded w-full text-xs uppercase">Store Note</button>
-                    </form>
+                <div class="system-bg system-border p-6 rounded-lg space-y-4">
+                    <div class="grid grid-cols-2 gap-4"><input type="text" id="noteTitle" placeholder="Title" class="p-2 rounded text-sm"><select id="noteSubj" class="p-2 rounded text-sm"></select></div>
+                    <textarea id="noteText" placeholder="Content..." rows="4" class="w-full p-2 rounded text-sm"></textarea>
+                    <button onclick="saveNote()" id="noteBtn" class="neon-bg text-white py-2 rounded w-full text-xs font-bold uppercase">Archive Note</button>
                 </div>
-                <div id="notes-container" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                <div id="noteList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
             </div>
 
             <div id="task-section" class="hidden space-y-6">
-                <div class="system-bg system-border rounded-lg p-6">
-                    <div class="text-sky-400 font-bold mb-4 uppercase text-xs">Quest Log</div>
-                    <form id="taskForm" class="grid grid-cols-2 gap-4">
-                        <input type="text" id="taskName" placeholder="Task Name" class="p-2 rounded text-sm"><select id="taskCycle" class="p-2 rounded text-sm"><option>Daily</option><option>Weekly</option><option>14 Days</option><option>Monthly</option></select>
-                        <textarea id="taskDesc" placeholder="Description" class="col-span-2 p-2 rounded text-sm"></textarea>
-                        <button type="submit" id="taskSubmitBtn" class="neon-bg text-white py-2 rounded text-xs col-span-2">COMMENCE</button>
-                    </form>
+                <div class="system-bg system-border p-6 rounded-lg space-y-4">
+                    <div class="grid grid-cols-2 gap-4"><input type="text" id="taskName" placeholder="Task" class="p-2 rounded text-sm"><select id="taskCycle" class="p-2 rounded text-sm"><option>Daily</option><option>Weekly</option><option>Monthly</option></select></div>
+                    <textarea id="taskDesc" placeholder="Description" class="w-full p-2 rounded text-sm"></textarea>
+                    <button onclick="addTask()" class="neon-bg text-white py-2 rounded w-full text-xs font-bold uppercase">Add Task</button>
                 </div>
-                <div class="system-bg system-border rounded-lg overflow-hidden"><table class="w-full text-left"><tbody id="taskList" class="divide-y divide-slate-800"></tbody></table></div>
+                <div class="system-bg system-border rounded-lg overflow-hidden"><table class="w-full text-left text-sm"><tbody id="taskList" class="divide-y divide-slate-800"></tbody></table></div>
             </div>
 
             <div id="event-section" class="hidden space-y-6">
-                <div class="system-bg system-border rounded-lg p-6">
-                    <div class="text-sky-400 font-bold mb-4 uppercase text-xs">Event Scheduler</div>
-                    <form id="eventForm" class="grid grid-cols-2 gap-4">
-                        <input type="text" id="eventName" placeholder="Event Name" class="p-2 rounded text-sm"><input type="date" id="eventDate" class="p-2 rounded text-sm">
-                        <textarea id="eventNotes" placeholder="Notes" class="col-span-2 p-2 rounded text-sm"></textarea>
-                        <button type="submit" id="eventSubmitBtn" class="neon-bg text-white py-2 rounded text-xs col-span-2">SAVE EVENT</button>
-                    </form>
+                <div class="system-bg system-border p-6 rounded-lg space-y-4">
+                    <div class="grid grid-cols-2 gap-4"><input type="text" id="eventName" placeholder="Event" class="p-2 rounded text-sm"><input type="date" id="eventDate" class="p-2 rounded text-sm"></div>
+                    <textarea id="eventNotes" placeholder="Notes" class="w-full p-2 rounded text-sm"></textarea>
+                    <button onclick="addEvent()" class="neon-bg text-white py-2 rounded w-full text-xs font-bold uppercase">Save Event</button>
                 </div>
                 <div class="system-bg system-border rounded-lg overflow-hidden"><table class="w-full text-left text-sm"><tbody id="eventList" class="divide-y divide-slate-800"></tbody></table></div>
             </div>
 
-            <div id="calendar-section" class="hidden space-y-4">
-                <div class="flex justify-between items-center system-bg system-border p-4 rounded-lg">
-                    <div class="flex space-x-1">
-                        <button onclick="setCalView('day')" id="day-btn" class="cal-v-btn px-4 py-1 text-[10px] font-bold border border-slate-700 rounded">DAY</button>
-                        <button onclick="setCalView('week')" id="week-btn" class="cal-v-btn px-4 py-1 text-[10px] font-bold border border-slate-700 rounded">WEEK</button>
-                        <button onclick="setCalView('month')" id="month-btn" class="cal-v-btn px-4 py-1 text-[10px] font-bold border border-slate-700 rounded view-active">MONTH</button>
-                    </div>
-                    <div class="flex items-center space-x-6 text-sky-400">
-                        <button onclick="navCal(-1)"><i class="fas fa-chevron-left"></i></button>
-                        <h2 class="font-bold w-32 text-center" id="cal-date-label">April 2026</h2>
-                        <button onclick="navCal(1)"><i class="fas fa-chevron-right"></i></button>
-                    </div>
-                </div>
-                <div id="cal-body-container" class="system-bg system-border rounded-lg overflow-hidden min-h-[400px]"></div>
-            </div>
-
             <div id="wallet-section" class="hidden space-y-6">
-                <div class="system-bg system-border rounded-lg p-6">
-                    <div class="text-emerald-400 font-bold mb-4 uppercase text-xs">Inventory Gold</div>
-                    <form id="walletForm" class="grid grid-cols-3 gap-4">
-                        <select id="walletType" class="p-2 rounded text-sm"><option value="deposit">Loot</option><option value="withdraw">Expense</option></select>
-                        <input type="number" id="walletAmount" step="0.01" placeholder="Amount" class="p-2 rounded text-sm"><input type="text" id="walletDesc" placeholder="Source" class="p-2 rounded text-sm">
-                        <button type="submit" id="walletSubmitBtn" class="bg-emerald-600 text-white py-2 rounded text-xs col-span-3">PROCESS</button>
-                    </form>
+                <div class="system-bg system-border p-6 rounded-lg space-y-4">
+                    <div class="grid grid-cols-3 gap-4"><select id="wType" class="p-2 rounded text-sm"><option value="deposit">Deposit</option><option value="withdraw">Withdraw</option></select><input type="number" id="wAmt" placeholder="Amt" class="p-2 rounded text-sm"><input type="text" id="wDesc" placeholder="Source" class="p-2 rounded text-sm"></div>
+                    <button onclick="addTrans()" class="bg-emerald-600 text-white font-bold py-2 rounded w-full text-xs uppercase">Process Entry</button>
                 </div>
-                <div class="text-center p-4"><h3 class="text-[10px] text-slate-500 mb-1">BALANCE</h3><div id="totalBalance" class="text-5xl font-black text-emerald-400">0.00</div></div>
+                <div class="text-center p-4 text-5xl font-black text-emerald-400" id="totalBal">0.00</div>
                 <div class="system-bg system-border rounded-lg overflow-hidden"><table class="w-full text-left text-sm"><tbody id="walletList" class="divide-y divide-slate-800"></tbody></table></div>
             </div>
+            
+            <div id="calendar-section" class="hidden space-y-4">
+                <div class="flex justify-between items-center system-bg system-border p-4 rounded-lg">
+                    <div class="flex space-x-1"><button onclick="setCalView('month')" class="px-4 py-1 text-[10px] font-bold border border-slate-700 rounded text-sky-400">MONTH</button></div>
+                    <div class="flex items-center space-x-6 text-sky-400 font-bold" id="calHead">APRIL 2026</div>
+                </div>
+                <div id="calBody" class="system-bg system-border rounded-lg min-h-[400px]"></div>
+            </div>
+
         </div>
     </main>
 
     <script>
-        let tasks = [], events = [], transactions = [], subjects = [], notes = [], balance = 0.0, calView = 'month', calOff = 0;
-        let edTId = null, edEId = null, edWId = null, edSId = null, edNId = null;
+        const firebaseConfig = {
+            apiKey: "AIzaSyB4NXaOQb4aWCZfCSInroGYvT7l_Fmerp8",
+            authDomain: "system-portal-968e6.firebaseapp.com",
+            databaseURL: "https://system-portal-968e6-default-rtdb.firebaseio.com",
+            projectId: "system-portal-968e6",
+            storageBucket: "system-portal-968e6.firebasestorage.app",
+            messagingSenderId: "711116374631",
+            appId: "1:711116374631:web:93daf102437953ac9f0ac2",
+            measurementId: "G-QB5Z7TBMPH"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.database();
+        let user = null;
+
+        function login() { auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+        function logout() { auth.signOut().then(() => location.reload()); }
+        
+        auth.onAuthStateChanged(u => {
+            if(u) { 
+                user = u; 
+                document.getElementById('login-overlay').classList.add('hidden'); 
+                document.getElementById('user-name').innerText = u.displayName; 
+                initCloud(); 
+            } else {
+                document.getElementById('login-overlay').classList.remove('hidden');
+            }
+        });
+
+        function initCloud() {
+            const ref = db.ref('users/' + user.uid);
+            ref.on('value', snap => {
+                const data = snap.val() || {};
+                renderStudy(data.study);
+                renderTasks(data.tasks);
+                renderWallet(data.wallet);
+                renderNotes(data.notes);
+                renderEvents(data.events);
+                updateHome(data);
+                renderCalendar(data.events);
+            });
+            ref.child('profile').once('value', s => { 
+                if(s.val()) document.getElementById('header-study-info').innerText = `${s.val().mod} | ${s.val().yr}`;
+            });
+        }
 
         function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
         function showSection(s) {
-            ['home','study','notes','task','event','calendar','wallet'].forEach(id => document.getElementById(`${id}-section`).classList.add('hidden'));
+            ['home','study','notes','task','event','wallet','calendar'].forEach(id => document.getElementById(id+'-section')?.classList.add('hidden'));
             document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('nav-active'));
-            document.getElementById(`${s}-section`).classList.remove('hidden');
-            document.getElementById(`${s}-btn`).classList.add('nav-active');
+            document.getElementById(s+'-section')?.classList.remove('hidden');
+            document.getElementById(s+'-btn').classList.add('nav-active');
             document.getElementById('page-title').innerText = s.toUpperCase();
-            if(s === 'home') updateHome(); if(s === 'calendar') renderCalendar(); if(s === 'notes') syncNoteSubjects();
         }
 
-        // --- STUDY/SUBJECT ---
-        document.getElementById('studyProfileForm').addEventListener('submit', (e) => { e.preventDefault(); document.getElementById('header-study-info').innerText = `${document.getElementById('studyModule').value} | ${document.getElementById('studyYear').value}`; });
-        document.getElementById('subjectForm').addEventListener('submit', (e) => {
-            e.preventDefault(); const c = document.getElementById('subjCode').value, n = document.getElementById('subjName').value, d = document.getElementById('subjDesc').value;
-            if(edSId) { subjects = subjects.map(s => s.id === edSId ? { id: edSId, code: c, name: n, desc: d } : s); edSId = null; document.getElementById('subjSubmitBtn').innerText = "REGISTER SUBJECT"; }
-            else { subjects.push({ id: Date.now(), code: c, name: n, desc: d }); }
-            renSubj(); e.target.reset();
-        });
-        function renSubj() { const l = document.getElementById('subjectList'); l.innerHTML = ""; subjects.forEach(s => l.innerHTML += `<tr><td class="p-4 text-sky-400 font-bold">${s.code}</td><td class="p-4 text-white">${s.name}</td><td class="p-4 text-xs text-slate-500">${s.desc}</td><td class="p-4 text-right"><button onclick="edS(${s.id})" class="text-sky-400 mr-2"><i class="fas fa-edit"></i></button><button onclick="remS(${s.id})" class="text-red-900"><i class="fas fa-trash"></i></button></td></tr>`); }
-        function edS(id) { const s=subjects.find(x=>x.id===id); edSId=id; document.getElementById('subjCode').value=s.code; document.getElementById('subjName').value=s.name; document.getElementById('subjDesc').value=s.desc; document.getElementById('subjSubmitBtn').innerText="UPDATE SUBJECT"; }
-        function remS(id) { subjects=subjects.filter(s=>s.id!==id); renSubj(); }
+        function updateProfile() {
+            const mod = document.getElementById('studyModule').value;
+            const yr = document.getElementById('studyYear').value;
+            db.ref('users/'+user.uid+'/profile').set({ mod, yr });
+        }
 
-        // --- NOTES ---
-        function syncNoteSubjects() { const d = document.getElementById('noteSubject'); d.innerHTML = '<option value="General">General</option>'; subjects.forEach(s => { d.innerHTML += `<option value="${s.code}">${s.code}</option>`; }); }
-        document.getElementById('noteForm').addEventListener('submit', (e) => {
-            e.preventDefault(); const t = document.getElementById('noteTitle').value, c = document.getElementById('noteSubject').value, co = document.getElementById('noteContent').value;
-            if(edNId) { notes = notes.map(n => n.id === edNId ? { id: edNId, title: t, category: c, content: co } : n); edNId = null; }
-            else { notes.push({ id: Date.now(), title: t, category: c, content: co }); }
-            renNotes(); e.target.reset();
-        });
-        function renNotes() { const c = document.getElementById('notes-container'); c.innerHTML = ""; notes.forEach(n => { c.innerHTML += `<div class="system-bg border border-slate-700 p-4 rounded-lg relative hover:border-sky-500 transition"><span class="text-[9px] text-sky-400 font-bold uppercase block mb-1">${n.category}</span><h4 class="text-white font-bold uppercase mb-2">${n.title}</h4><p class="text-xs text-slate-500 mb-4 whitespace-pre-wrap">${n.content}</p><button onclick="edNote(${n.id})" class="text-sky-400 text-xs mr-2">Edit</button><button onclick="remNote(${n.id})" class="text-red-900 text-xs">Delete</button></div>`; }); }
-        function edNote(id) { const n = notes.find(x => x.id === id); edNId = id; document.getElementById('noteTitle').value = n.title; document.getElementById('noteSubject').value = n.category; document.getElementById('noteContent').value = n.content; }
-        function remNote(id) { notes = notes.filter(n => n.id !== id); renNotes(); }
+        function addSubject() {
+            const c = document.getElementById('subjCode').value, n = document.getElementById('subjName').value, d = document.getElementById('subjDesc').value;
+            db.ref('users/'+user.uid+'/study').push({ code:c, name:n, desc:d });
+            document.getElementById('subjCode').value = ''; document.getElementById('subjName').value = ''; document.getElementById('subjDesc').value = '';
+        }
 
-        // --- TASKS/EVENTS/WALLET (Restored) ---
-        document.getElementById('taskForm').addEventListener('submit', (e) => { e.preventDefault(); const d = { id: edTId||Date.now(), name: document.getElementById('taskName').value, cycle: document.getElementById('taskCycle').value, desc: document.getElementById('taskDesc').value }; if(edTId) { tasks = tasks.map(t=>t.id===edTId?d:t); edTId=null; } else tasks.push(d); renT(); e.target.reset(); });
-        function renT() { const l = document.getElementById('taskList'); l.innerHTML = ""; tasks.forEach(t => l.innerHTML += `<tr><td class="p-4 text-white">${t.name}<p class="text-[10px] text-slate-500">${t.desc}</p></td><td class="p-4 text-sky-400 font-bold text-[9px]">${t.cycle}</td><td class="p-4 text-right"><button onclick="edTa(${t.id})" class="text-sky-400 mr-2"><i class="fas fa-edit text-xs"></i></button><button onclick="remT(${t.id})" class="text-red-900"><i class="fas fa-trash text-xs"></i></button></td></tr>`); }
-        function edTa(id) { const t=tasks.find(x=>x.id===id); edTId=id; document.getElementById('taskName').value=t.name; document.getElementById('taskDesc').value=t.desc; showSection('task'); }
-        function remT(id) { tasks=tasks.filter(t=>t.id!==id); renT(); }
-
-        document.getElementById('eventForm').addEventListener('submit', (e) => { e.preventDefault(); const d = { id: edEId||Date.now(), name: document.getElementById('eventName').value, date: document.getElementById('eventDate').value, notes: document.getElementById('eventNotes').value }; if(edEId) { events = events.map(v=>v.id===edEId?d:v); edEId=null; } else events.push(d); renE(); e.target.reset(); });
-        function renE() { const l = document.getElementById('eventList'); l.innerHTML = ""; events.forEach(v => l.innerHTML += `<tr><td class="p-4 text-sky-400 font-bold">${v.date}</td><td class="p-4 text-white">${v.name}<p class="text-[10px] text-slate-500">${v.notes}</p></td><td class="p-4 text-right"><button onclick="edEv(${v.id})" class="text-sky-400 mr-2"><i class="fas fa-edit text-xs"></i></button><button onclick="remE(${v.id})" class="text-red-900"><i class="fas fa-trash text-xs"></i></button></td></tr>`); }
-        function edEv(id) { const v=events.find(x=>x.id===id); edEId=id; document.getElementById('eventName').value=v.name; document.getElementById('eventDate').value=v.date; document.getElementById('eventNotes').value=v.notes; showSection('event'); }
-        function remE(id) { events=events.filter(v=>v.id!==id); renE(); }
-
-        document.getElementById('walletForm').addEventListener('submit', (e) => { e.preventDefault(); const t = document.getElementById('walletType').value, a = parseFloat(document.getElementById('walletAmount').value), d = document.getElementById('walletDesc').value; if(edWId) { transactions = transactions.map(x => x.id === edWId ? { ...x, type:t, amount:a, desc:d } : x); edWId=null; } else { transactions.unshift({ id:Date.now(), type:t, amount:a, desc:d }); } calcW(); renW(); e.target.reset(); });
-        function calcW() { balance = transactions.reduce((a, t) => t.type === 'deposit' ? a + t.amount : a - t.amount, 0.0); }
-        function renW() { const l = document.getElementById('walletList'); document.getElementById('totalBalance').innerText = balance.toFixed(2); l.innerHTML = ""; transactions.forEach(t => l.innerHTML += `<tr><td class="p-4 text-white">${t.desc}</td><td class="p-4 text-center font-bold text-[9px] ${t.type==='deposit'?'text-emerald-400':'text-red-500'} uppercase">${t.type}</td><td class="p-4 text-right font-black ${t.type==='deposit'?'text-emerald-400':'text-red-500'}">${t.amount.toFixed(2)}</td><td class="p-4 text-right"><button onclick="edW(${t.id})" class="text-sky-400 mr-2"><i class="fas fa-edit"></i></button><button onclick="remW(${t.id})" class="text-red-900"><i class="fas fa-trash"></i></button></td></tr>`); }
-        function edW(id) { const t=transactions.find(x=>x.id===id); edWId=id; document.getElementById('walletType').value=t.type; document.getElementById('walletAmount').value=t.amount; document.getElementById('walletDesc').value=t.desc; }
-        function remW(id) { transactions=transactions.filter(t=>t.id!==id); calcW(); renW(); }
-
-        // --- CALENDAR ---
-        function setCalView(v) { calView = v; calOff = 0; document.querySelectorAll('.cal-v-btn').forEach(b => b.classList.remove('view-active')); document.getElementById(`${v}-btn`).classList.add('view-active'); renderCalendar(); }
-        function navCal(o) { calOff += o; renderCalendar(); }
-        function renderCalendar() {
-            const container = document.getElementById('cal-body-container'); document.getElementById('cal-date-label').innerText = calOff === 0 ? "April 2026" : "May 2026"; container.innerHTML = "";
-            if(calView === 'month') {
-                container.innerHTML = `<div class="calendar-grid text-[10px] text-center font-bold text-sky-400 py-2"><div>SUN</div><div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div id="m-body" class="contents"></div></div>`;
-                const start = calOff === 0 ? 3 : 5; for(let i=0; i<start; i++) document.getElementById('m-body').innerHTML += `<div class="calendar-day opacity-20"></div>`;
-                for(let d=1; d<=30; d++) { const ds = `2026-04-${d.toString().padStart(2,'0')}`; const evs = events.filter(e => e.date === ds).map(e => `<div class="bg-sky-600 text-white text-[8px] p-0.5 mb-0.5 rounded truncate font-bold">${e.name}</div>`).join(''); document.getElementById('m-body').innerHTML += `<div class="calendar-day p-2 text-[10px] text-slate-700 font-bold">${d}<div class="mt-1">${evs}</div></div>`; }
-            } else if(calView === 'week') {
-                container.innerHTML = `<div class="grid grid-cols-7 h-full divide-x divide-slate-800"></div>`;
-                for(let i=0; i<7; i++) { const dn = 26 + i + (calOff*7); const ds = `2026-04-${dn}`; const evs = events.filter(e => e.date === ds).map(e => `<div class="bg-sky-500 text-white p-2 rounded m-1 text-[10px] font-bold">${e.name}</div>`).join(''); container.firstChild.innerHTML += `<div class="p-2 text-center text-[10px] font-bold h-full uppercase text-sky-400 border-b border-slate-800">Day ${dn}<div class="mt-4">${evs}</div></div>`; }
-            } else {
-                const dn = 28 + calOff; const evs = events.filter(e => e.date === `2026-04-${dn}`).map(e => `<div class="bg-sky-900/40 p-6 rounded-xl m-6 system-border"><strong>${e.name}</strong><p class="text-sm text-slate-400 mt-2">${e.notes}</p></div>`).join(''); container.innerHTML = evs || `<p class="p-10 italic text-gray-500 text-sm">No events.</p>`;
+        function renderStudy(data) {
+            const l = document.getElementById('subjectList'); l.innerHTML = "";
+            const sel = document.getElementById('noteSubj'); sel.innerHTML = '<option value="General">General</option>';
+            for(let id in data) {
+                const s = data[id];
+                l.innerHTML += `<tr><td class="p-4 text-sky-400 font-bold">${s.code}</td><td class="p-4 text-white">${s.name}</td><td class="p-4 text-right"><button onclick="remC('study','${id}')" class="text-red-900"><i class="fas fa-trash"></i></button></td></tr>`;
+                sel.innerHTML += `<option value="${s.code}">${s.code}</option>`;
             }
         }
 
-        function updateHome() { if(tasks.length) document.getElementById('home-task-display').innerText = tasks[tasks.length-1].name; if(events.length) document.getElementById('home-event-display').innerText = events[events.length-1].name; document.getElementById('home-wallet-display').innerText = balance.toFixed(2); }
+        function saveNote() {
+            const t = document.getElementById('noteTitle').value, s = document.getElementById('noteSubj').value, c = document.getElementById('noteText').value;
+            db.ref('users/'+user.uid+'/notes').push({ title:t, subj:s, text:c });
+            document.getElementById('noteTitle').value = ''; document.getElementById('noteText').value = '';
+        }
+
+        function renderNotes(data) {
+            const l = document.getElementById('noteList'); l.innerHTML = "";
+            for(let id in data) {
+                const n = data[id];
+                l.innerHTML += `<div class="system-bg system-border p-4 rounded-lg"><span class="text-[9px] text-sky-400 font-bold uppercase">${n.subj}</span><h4 class="text-white font-bold mb-2 uppercase">${n.title}</h4><p class="text-xs text-slate-500 mb-4 whitespace-pre-wrap">${n.text}</p><button onclick="remC('notes','${id}')" class="text-red-900 text-xs font-bold">DELETE</button></div>`;
+            }
+        }
+
+        function addTask() {
+            const n = document.getElementById('taskName').value, c = document.getElementById('taskCycle').value, d = document.getElementById('taskDesc').value;
+            db.ref('users/'+user.uid+'/tasks').push({ name:n, cycle:c, desc:d });
+            document.getElementById('taskName').value = ''; document.getElementById('taskDesc').value = '';
+        }
+
+        function renderTasks(data) {
+            const l = document.getElementById('taskList'); l.innerHTML = "";
+            for(let id in data) {
+                const t = data[id];
+                l.innerHTML += `<tr><td class="p-4"><b class="text-white uppercase text-xs">${t.name}</b><p class="text-[10px] text-slate-500 mt-1">${t.desc}</p></td><td class="p-4 text-sky-400 font-bold text-[9px] uppercase">${t.cycle}</td><td class="p-4 text-right"><button onclick="remC('tasks','${id}')" class="text-red-900"><i class="fas fa-trash"></i></button></td></tr>`;
+            }
+        }
+
+        function addEvent() {
+            const n = document.getElementById('eventName').value, d = document.getElementById('eventDate').value, no = document.getElementById('eventNotes').value;
+            db.ref('users/'+user.uid+'/events').push({ name:n, date:d, notes:no });
+            document.getElementById('eventName').value = ''; document.getElementById('eventNotes').value = '';
+        }
+
+        function renderEvents(data) {
+            const l = document.getElementById('eventList'); l.innerHTML = "";
+            for(let id in data) {
+                const v = data[id];
+                l.innerHTML += `<tr><td class="p-4 text-sky-400 font-bold text-xs">${v.date}</td><td class="p-4 text-white uppercase text-xs font-bold">${v.name}</td><td class="p-4 text-right"><button onclick="remC('events','${id}')" class="text-red-900"><i class="fas fa-trash"></i></button></td></tr>`;
+            }
+        }
+
+        function addTrans() {
+            const t = document.getElementById('wType').value, a = parseFloat(document.getElementById('wAmt').value), d = document.getElementById('wDesc').value;
+            if(!isNaN(a)) db.ref('users/'+user.uid+'/wallet').push({ type:t, amt:a, desc:d });
+            document.getElementById('wAmt').value = ''; document.getElementById('wDesc').value = '';
+        }
+
+        function renderWallet(data) {
+            const l = document.getElementById('walletList'); l.innerHTML = "";
+            let b = 0;
+            for(let id in data) {
+                const t = data[id]; b += (t.type==='deposit'?t.amt:-t.amt);
+                l.innerHTML += `<tr><td class="p-4 text-white text-xs font-bold">${t.desc}</td><td class="p-4 text-center font-bold text-[9px] ${t.type==='deposit'?'text-emerald-400':'text-red-500'} uppercase">${t.type}</td><td class="p-4 text-right ${t.type==='deposit'?'text-emerald-400':'text-red-500'} font-black">${t.amt.toFixed(2)}</td><td class="p-4 text-right"><button onclick="remC('wallet','${id}')" class="text-red-900"><i class="fas fa-trash"></i></button></td></tr>`;
+            }
+            document.getElementById('totalBal').innerText = b.toFixed(2);
+            document.getElementById('home-balance').innerText = b.toFixed(2);
+        }
+
+        function remC(p, id) { db.ref('users/'+user.uid+'/'+p+'/'+id).remove(); }
+        
+        function updateHome(data) {
+            if(data.tasks) { const k = Object.keys(data.tasks); document.getElementById('home-task').innerText = data.tasks[k[k.length-1]].name; }
+            if(data.events) { const k = Object.keys(data.events); document.getElementById('home-event').innerText = data.events[k[k.length-1]].name; }
+        }
+
+        function renderCalendar(evs) {
+            const b = document.getElementById('calBody'); b.innerHTML = `<div class="calendar-grid text-[10px] text-sky-400 font-bold text-center py-2 uppercase"><div>SUN</div><div>MON</div><div>TUE</div><div>WED</div><div>THU</div><div>FRI</div><div>SAT</div><div id="m-body" class="contents"></div></div>`;
+            const mBody = document.getElementById('m-body');
+            for(let i=0; i<3; i++) mBody.innerHTML += `<div class="calendar-day opacity-10"></div>`;
+            for(let d=1; d<=30; d++) {
+                const ds = `2026-04-${d.toString().padStart(2,'0')}`;
+                let dots = "";
+                for(let id in evs) { if(evs[id].date === ds) dots += `<div class="bg-sky-500 text-white text-[7px] p-0.5 mb-0.5 rounded truncate uppercase">${evs[id].name}</div>`; }
+                mBody.innerHTML += `<div class="calendar-day p-2 text-[10px] text-slate-700 font-bold">${d}<div class="mt-1">${dots}</div></div>`;
+            }
+        }
+
         showSection('home');
     </script>
 </body>
